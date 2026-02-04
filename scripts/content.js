@@ -27,6 +27,26 @@ const buttonsToDisable = [
     'closeOtherTabsButton'
 ]
 
+function getViewportMetrics() {
+    const vv = window.visualViewport
+    if (!vv) {
+        return {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scale: 1,
+            offsetLeft: 0,
+            offsetTop: 0
+        }
+    }
+    return {
+        width: vv.width,
+        height: vv.height,
+        scale: vv.scale || 1,
+        offsetLeft: vv.offsetLeft || 0,
+        offsetTop: vv.offsetTop || 0
+    }
+}
+
 //
 // Get settings
 //
@@ -217,70 +237,112 @@ function styleToolbarDivs() {
 }
 
 function updateToolbarHeight() {
+    const metrics = getViewportMetrics()
     const calculatedHeight = calculateToolbarHeight()
+    const toolbarWidthPercent = Number(settings.toolbarWidth) || 0
+    const margin = Number(settings.topBottomMargin)
+        ? Math.floor(settings.topBottomMargin / metrics.scale)
+        : 0
     if (iframeHidden) {
         unhideIcon.style.height = `${calculatedHeight}px`
         unhideIcon.style.width = `${calculatedHeight}px`
         unhideIcon.style.left = `${
-            visualViewport.width - calculatedHeight * 1.5
+            Math.round(
+                metrics.offsetLeft +
+                    metrics.width -
+                    calculatedHeight * 1.5
+            )
         }px`
         settings.defaultPosition === 'top'
-            ? (unhideIcon.style.top = `${calculatedHeight * 1.5}px`)
+            ? (unhideIcon.style.top = `${
+                  Math.round(metrics.offsetTop + calculatedHeight * 1.5)
+              }px`)
             : (unhideIcon.style.top = `${
-                  visualViewport.height - calculatedHeight * 2.5
+                  Math.round(
+                      metrics.offsetTop +
+                          metrics.height -
+                          calculatedHeight * 2.5
+                  )
               }px`)
     } else {
         if (
             settings.defaultPosition === 'top' ||
             settings.defaultPosition === 'bottom'
         ) {
-            toolbarIframe.style.cssText += `height: ${calculatedHeight}px !important;`
-            if (Number(settings.toolbarWidth) !== 100) {
-                toolbarIframe.style.left = '50%'
-                toolbarIframe.style.transform = 'translateX(-50%)'
-            } else {
-                toolbarIframe.style.left = '0'
-            }
-            settings.defaultPosition === 'top'
-                ? (toolbarIframe.style.top = '0px')
-                : (toolbarIframe.style.bottom = '0px')
-            if (Number(settings.topBottomMargin) !== 0) {
-                const margin = Math.floor(
-                    settings.topBottomMargin / window.visualViewport.scale
-                )
-                toolbarIframe.style.margin = `${margin}px 0`
-            }
+            const widthPx = Math.round(
+                (toolbarWidthPercent / 100) * metrics.width
+            )
+            toolbarIframe.style.setProperty(
+                'width',
+                `${widthPx}px`,
+                'important'
+            )
+            toolbarIframe.style.setProperty(
+                'height',
+                `${calculatedHeight}px`,
+                'important'
+            )
+            const left =
+                metrics.offsetLeft +
+                Math.max(0, (metrics.width - widthPx) / 2)
+            const top =
+                settings.defaultPosition === 'top'
+                    ? metrics.offsetTop + margin
+                    : metrics.offsetTop +
+                      metrics.height -
+                      calculatedHeight -
+                      margin
+            toolbarIframe.style.left = `${Math.round(left)}px`
+            toolbarIframe.style.top = `${Math.round(top)}px`
+            toolbarIframe.style.right = 'unset'
+            toolbarIframe.style.bottom = 'unset'
+            toolbarIframe.style.transform = 'none'
+            toolbarIframe.style.margin = '0'
         } else {
-            toolbarIframe.style.cssText += `width: ${calculatedHeight}px !important;`
-            if (Number(settings.toolbarWidth) !== 100) {
-                toolbarIframe.style.top = '50%'
-                toolbarIframe.style.transform = 'translateY(-50%)'
-            } else {
-                toolbarIframe.style.top = '0'
-            }
-            settings.defaultPosition === 'left'
-                ? (toolbarIframe.style.left = '0px')
-                : (toolbarIframe.style.right = '0px')
-            if (Number(settings.topBottomMargin) !== 0) {
-                const margin = Math.floor(
-                    settings.topBottomMargin / window.visualViewport.scale
-                )
-                toolbarIframe.style.margin = `0 ${margin}px`
-            }
+            const heightPx = Math.round(
+                (toolbarWidthPercent / 100) * metrics.height
+            )
+            toolbarIframe.style.setProperty(
+                'height',
+                `${heightPx}px`,
+                'important'
+            )
+            toolbarIframe.style.setProperty(
+                'width',
+                `${calculatedHeight}px`,
+                'important'
+            )
+            const top =
+                metrics.offsetTop +
+                Math.max(0, (metrics.height - heightPx) / 2)
+            const left =
+                settings.defaultPosition === 'left'
+                    ? metrics.offsetLeft + margin
+                    : metrics.offsetLeft +
+                      metrics.width -
+                      calculatedHeight -
+                      margin
+            toolbarIframe.style.left = `${Math.round(left)}px`
+            toolbarIframe.style.top = `${Math.round(top)}px`
+            toolbarIframe.style.right = 'unset'
+            toolbarIframe.style.bottom = 'unset'
+            toolbarIframe.style.transform = 'none'
+            toolbarIframe.style.margin = '0'
         }
     }
 }
 
 function calculateToolbarHeight() {
+    const metrics = getViewportMetrics()
     if (iframeHidden) {
         return (calculatedHeight = Math.floor(
-            settings.toolbarHeight / window.visualViewport.scale
+            settings.toolbarHeight / metrics.scale
         ))
     } else {
         return (calculatedHeight = menuDivHidden
-            ? Math.floor(settings.toolbarHeight / window.visualViewport.scale)
+            ? Math.floor(settings.toolbarHeight / metrics.scale)
             : Math.floor(
-                  (settings.toolbarHeight / window.visualViewport.scale) * 2
+                  (settings.toolbarHeight / metrics.scale) * 2
               ))
     }
 }
@@ -291,15 +353,10 @@ function closeMenu() {
         menuDiv.style.display = 'none'
         if (menuDiv.classList.contains('horizontal')) {
             toolbarDiv.style.height = '100%'
-            const currentToolbarHeight =
-                toolbarIframe.getBoundingClientRect().height
-            toolbarIframe.style.height = currentToolbarHeight / 2 + 'px'
         } else {
             toolbarDiv.style.width = '100%'
-            const currentToolbarWidth =
-                toolbarIframe.getBoundingClientRect().width
-            toolbarIframe.style.width = currentToolbarWidth / 2 + 'px'
         }
+        updateToolbarHeight()
         menuButtonFlag.classList.remove('pressed')
     }
 }
@@ -387,18 +444,13 @@ const buttonElements = {
                 this.classList.add('pressed')
                 menuDivHidden = false
                 if (menuDiv.classList.contains('horizontal')) {
-                    const currentToolbarHeight =
-                        toolbarIframe.getBoundingClientRect().height
-                    toolbarIframe.style.height = currentToolbarHeight * 2 + 'px'
                     toolbarDiv.style.height = '50%'
                 } else {
-                    const currentToolbarWidth =
-                        toolbarIframe.getBoundingClientRect().width
-                    toolbarIframe.style.width = currentToolbarWidth * 2 + 'px'
                     toolbarDiv.style.width = '50%'
                 }
                 menuDiv.style.display = 'flex'
                 menuButtonFlag = this
+                updateToolbarHeight()
             } else {
                 closeMenu()
             }

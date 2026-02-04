@@ -114,7 +114,7 @@ It is also very useful to change the settings in **Delete browsing data on quit.
 <img src="https://github.com/KristhianX/essential-buttons-toolbar/blob/main/images/Screenshot_20231027-212100.png?raw=true" width="200px"/>
 
 ## Known issues:
-Some websites are not well optimized for mobile. Some will have a little zoom that will make the toolbar be displayed outside of the viewport or display only a part of it. You can find the toolbar by zooming out.
+Some websites are not well optimized for mobile and trigger viewport zoom. The toolbar is positioned using the visual viewport, but if a site forces heavy zoom you may still need to zoom out to see it.
 
 ## Note:
 This initially began as a userscript, which I later developed into an extension to access additional features.  
