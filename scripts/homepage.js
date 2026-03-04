@@ -947,11 +947,16 @@ function generateCreditsContainer() {
     if (creditInfo) {
         creditContainer = document.createElement('div')
         const authorLink = document.createElement('a')
-        authorLink.href = `${creditInfo.authorUrl}?utm_source=essential_homepage&utm_medium=referral`
+        authorLink.href = creditInfo.authorUrl
         authorLink.target = '_blank'
         authorLink.textContent = creditInfo.authorName
         const photoLink = document.createElement('a')
-        photoLink.href = `https://unsplash.com/?utm_source=essential_homepage&utm_medium=referral`
+        try {
+            const photoPageUrl = new URL(creditInfo.photoUrl)
+            photoLink.href = photoPageUrl.toString()
+        } catch (error) {
+            photoLink.href = `https://unsplash.com/`
+        }
         photoLink.target = '_blank'
         photoLink.textContent = 'Unsplash'
         const changeWallDiv = document.createElement('div')
