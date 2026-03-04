@@ -33,29 +33,18 @@ const customUrlInput = document.getElementById('customUrl')
 const excludedUrlsList = document.getElementById('excludedUrls')
 const version = browser.runtime.getManifest().version
 let currentlyDisplayedDescription
-const addonInfoCloseButton = document.getElementById('addonInfoCloseButton')
-const checkbox = document.getElementById('disableUpdatesMsg')
 
 //
 // Setup conditions
 //
 browser.storage.local
-    .get(['senderURL', 'installedOrUpdated', 'disableUpdatesMsg'])
+    .get(['senderURL'])
     .then((result) => {
         if (result.senderURL) {
             customUrlInput.value = result.senderURL
             browser.storage.local.remove('senderURL')
         } else {
             customUrlInput.value = window.location.href
-        }
-        if (result.installedOrUpdated === true) {
-            headerInfo.style.display = 'none'
-            addonInfo.style.display = 'block'
-            browser.storage.local.set({ installedOrUpdated: false })
-        }
-        if (result.disableUpdatesMsg) {
-            const isChecked = result.disableUpdatesMsg
-            checkbox.checked = isChecked
         }
     })
 
@@ -204,17 +193,6 @@ function updateLabels(position) {
 // Header info
 //
 versionHeader.textContent = version
-function handleCheckboxChange() {
-    const isChecked = checkbox.checked
-    browser.storage.local.set({ disableUpdatesMsg: isChecked })
-}
-
-checkbox.addEventListener('change', handleCheckboxChange)
-
-browser.storage.local.get('disableUpdatesMsg', function (result) {
-    const isChecked = result.disableUpdatesFlag || false
-    checkbox.checked = isChecked
-})
 
 //
 // Help messages
@@ -256,14 +234,6 @@ buttonsSettingsCloseButton.addEventListener('click', () => {
     buttonsSettingsQuestionMark.style.display = 'inline-block'
 })
 infoCardCloseButton.addEventListener('click', closeButtonInfo)
-addonInfoCloseButton.addEventListener('click', () => {
-    addonInfo.style.display = 'none'
-    headerInfo.style.display = 'inline-flex'
-})
-headerInfo.addEventListener('click', () => {
-    headerInfo.style.display = 'none'
-    addonInfo.style.display = 'block'
-})
 
 //
 // Handle tabs
@@ -279,8 +249,6 @@ function createTab(tabId, tabText) {
 }
 
 function showTab(tabId) {
-    addonInfo.style.display = 'none'
-    headerInfo.style.display = 'inline-flex'
     statusMessage.style.display = 'none'
     generalSettings.style.display = tabId === 'generalTab' ? 'block' : 'none'
     buttonsSettings.style.display = tabId === 'buttonsTab' ? 'block' : 'none'

@@ -133,22 +133,10 @@ browser.tabs.onActivated.addListener(function () {
 function handleInstallOrUpdate(details) {
     if (details.reason === 'install') {
         setSettingsValues()
-        browser.storage.local
-            .set({ disableUpdatesMsg: false, installedOrUpdated: true })
-            .then(() => {
-                browser.runtime.openOptionsPage()
-            })
+        browser.runtime.openOptionsPage()
     } else if (details.reason === 'update') {
         setSettingsValues()
-        browser.storage.local.get('disableUpdatesMsg').then((result) => {
-            if (!result.disableUpdatesMsg) {
-                browser.storage.local
-                    .set({ installedOrUpdated: true })
-                    .then(() => {
-                        browser.runtime.openOptionsPage()
-                    })
-            }
-        })
+        browser.runtime.openOptionsPage()
     }
 }
 
