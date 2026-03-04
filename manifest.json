@@ -32,22 +32,12 @@
         "scripts": ["scripts/background.js"],
         "persistent": false
     },
-    "applications": {
+    "browser_specific_settings": {
         "gecko": {
-            "id": "defmikekoh-mymodified-essential-buttons-toolbar-extension@example.com"
+            "id": "defmikekoh-mymodified-essential-buttons-toolbar-extension@example.com",
+            "data_collection_permissions": {
+                "required": ["none"]
+            }
         }
-    },
-    "data_collection_permissions": {
-        "identity": [],
-        "location": [],
-        "health": [],
-        "financial": [],
-        "contacts": [],
-        "messages": [],
-        "webActivity": [],
-        "websiteContent": [],
-        "deviceInfo": [],
-        "profiling": [],
-        "extensions": []
     }
 }
