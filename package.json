@@ -1,0 +1,9 @@
+{
+  "name": "essential-buttons-toolbar",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "build:xpi": "mkdir -p ztemp && zip -r ztemp/essential-buttons-toolbar.xpi manifest.json pages scripts styles icons images LICENSE README.md -x \"*.DS_Store\" \"ztemp/*\" \"zothercode/*\" \".git/*\"",
+    "build": "npm run build:xpi"
+  }
+}
