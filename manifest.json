@@ -32,9 +32,22 @@
         "scripts": ["scripts/background.js"],
         "persistent": false
     },
-    "browser_specific_settings": {
+    "applications": {
         "gecko": {
-            "id": "{defmikekoh-mymodified-essential-buttons-toolbar-extension@example.com}"
+            "id": "defmikekoh-mymodified-essential-buttons-toolbar-extension@example.com"
         }
+    },
+    "data_collection_permissions": {
+        "identity": [],
+        "location": [],
+        "health": [],
+        "financial": [],
+        "contacts": [],
+        "messages": [],
+        "webActivity": [],
+        "websiteContent": [],
+        "deviceInfo": [],
+        "profiling": [],
+        "extensions": []
     }
 }
