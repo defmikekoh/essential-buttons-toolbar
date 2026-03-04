@@ -12,6 +12,9 @@ const homepageURLInput = document.getElementById('homepageURL')
 const newTabURLInput = document.getElementById('newTabURL')
 const toolbarHeightRangeInput = document.getElementById('toolbarHeight')
 const toolbarWidthRangeInput = document.getElementById('toolbarWidth')
+const toolbarPositionPercentRangeInput = document.getElementById(
+    'toolbarPositionPercent'
+)
 const toolbarTransparencyRangeInput = document.getElementById(
     'toolbarTransparency'
 )
@@ -73,6 +76,7 @@ function loadValues() {
             'newTabURL',
             'toolbarHeight',
             'toolbarWidth',
+            'toolbarPositionPercent',
             'topBottomMargin',
             'defaultPosition',
             'theme',
@@ -96,6 +100,12 @@ function loadValues() {
             toolbarHeightRangeInput.value = result.toolbarHeight
             currentValueWidth.textContent = result.toolbarWidth
             toolbarWidthRangeInput.value = result.toolbarWidth
+            const toolbarPositionPercent =
+                Number.isFinite(Number(result.toolbarPositionPercent))
+                    ? Number(result.toolbarPositionPercent)
+                    : 50
+            currentValuePositionPercent.textContent = toolbarPositionPercent
+            toolbarPositionPercentRangeInput.value = toolbarPositionPercent
             previewButtons.forEach((previewButton) => {
                 previewButton.style.height =
                     result.toolbarHeight / window.visualViewport.scale -
@@ -178,11 +188,15 @@ function updateLabels(position) {
             'Toolbar Height (px):'
         document.querySelector('label[for="toolbarWidth"]').textContent =
             'Toolbar Width (%):'
+        document.querySelector('label[for="toolbarPositionPercent"]').textContent =
+            'Toolbar Position (%):'
     } else {
         document.querySelector('label[for="toolbarHeight"]').textContent =
             'Toolbar Width (px):'
         document.querySelector('label[for="toolbarWidth"]').textContent =
             'Toolbar Height (%):'
+        document.querySelector('label[for="toolbarPositionPercent"]').textContent =
+            'Toolbar Position (%):'
     }
 }
 
@@ -300,6 +314,11 @@ toolbarHeightRangeInput.addEventListener('input', function () {
 toolbarWidthRangeInput.addEventListener('input', function () {
     const currentValue = toolbarWidthRangeInput.value
     currentValueWidth.textContent = currentValue
+})
+
+toolbarPositionPercentRangeInput.addEventListener('input', function () {
+    const currentValue = toolbarPositionPercentRangeInput.value
+    currentValuePositionPercent.textContent = currentValue
 })
 
 toolbarTransparencyRangeInput.addEventListener('input', function () {
@@ -508,6 +527,7 @@ generalSaveButton.addEventListener('click', () => {
     let defNewTabURL = setSanitizeUrl(rawNewTabURL)
     const toolbarHeight = toolbarHeightRangeInput.value
     const toolbarWidth = toolbarWidthRangeInput.value
+    const toolbarPositionPercent = toolbarPositionPercentRangeInput.value
     const toolbarTransparency = toolbarTransparencyRangeInput.value
     const topBottomMargin = topBottomMarginRangeInput.value
     const defaultPosition = defaultPositionSelect.value
@@ -535,6 +555,7 @@ generalSaveButton.addEventListener('click', () => {
             newTabURL: defNewTabURL,
             toolbarHeight: toolbarHeight,
             toolbarWidth: toolbarWidth,
+            toolbarPositionPercent: toolbarPositionPercent,
             toolbarTransparency: toolbarTransparency,
             topBottomMargin: topBottomMargin,
             defaultPosition: defaultPosition,

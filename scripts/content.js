@@ -56,6 +56,7 @@ function getSettingsValues() {
         'newTabURL',
         'toolbarHeight',
         'toolbarWidth',
+        'toolbarPositionPercent',
         'toolbarTransparency',
         'topBottomMargin',
         'defaultPosition',
@@ -240,6 +241,11 @@ function updateToolbarHeight() {
     const metrics = getViewportMetrics()
     const calculatedHeight = calculateToolbarHeight()
     const toolbarWidthPercent = Number(settings.toolbarWidth) || 0
+    const parsedPositionPercent = Number(settings.toolbarPositionPercent)
+    const positionPercent = Math.max(
+        0,
+        Math.min(100, Number.isFinite(parsedPositionPercent) ? parsedPositionPercent : 50)
+    )
     const margin = Number(settings.topBottomMargin)
         ? Math.floor(settings.topBottomMargin / metrics.scale)
         : 0
@@ -284,7 +290,9 @@ function updateToolbarHeight() {
             )
             const left =
                 metrics.offsetLeft +
-                Math.max(0, (metrics.width - widthPx) / 2)
+                Math.round(
+                    (positionPercent / 100) * Math.max(0, metrics.width - widthPx)
+                )
             const top =
                 settings.defaultPosition === 'top'
                     ? metrics.offsetTop + margin
@@ -314,7 +322,10 @@ function updateToolbarHeight() {
             )
             const top =
                 metrics.offsetTop +
-                Math.max(0, (metrics.height - heightPx) / 2)
+                Math.round(
+                    (positionPercent / 100) *
+                        Math.max(0, metrics.height - heightPx)
+                )
             const left =
                 settings.defaultPosition === 'left'
                     ? metrics.offsetLeft + margin
