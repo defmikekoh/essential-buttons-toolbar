@@ -71,6 +71,10 @@ body {
     z-index: -1;
 }
 
+#background-container.unsplash-full-opacity {
+    opacity: 1;
+}
+
 #credit-container {
     position: absolute;
     color: var(--text-color);

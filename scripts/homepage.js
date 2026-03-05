@@ -45,6 +45,11 @@ function overrideTheme(theme) {
     document.documentElement.classList.toggle('light-theme', theme === 'light')
 }
 
+function updateBackgroundOpacity() {
+    const isUnsplash = homepageSettings.homepageBg === 'unsplash'
+    backgroundContainer.classList.toggle('unsplash-full-opacity', isUnsplash)
+}
+
 function getSettings() {
     const keys = [
         'theme',
@@ -1277,10 +1282,13 @@ async function savePreferences() {
     }
     if (hasChanged) {
         await browser.storage.sync.set(newValues) // Await optional if no further chaining required
+        homepageSettings.homepageBg = selectBg.value
+        homepageSettings.unsplashQuery = unsplashQuery.value
+        homepageSettings.customBgURL = customBgURL.value
+        updateBackgroundOpacity()
         if (selectBg.value === 'unsplash') {
             removeWallpaperFromLocal()
             getWallpaper(unsplashQuery.value)
-            homepageSettings.unsplashQuery = unsplashQuery.value
         } else if (selectBg.value === 'custom') {
             removeWallpaperFromLocal()
             getWallpaperFromURL(customBgURL.value)
@@ -1388,6 +1396,7 @@ homepagePreferencesButton.addEventListener('click', createPreferencesPrompt)
 function initHomepage() {
     getSettings().then(() => {
         overrideTheme(homepageSettings.theme)
+        updateBackgroundOpacity()
         if (homepageSettings.homepageBg === 'unsplash') {
             setWallpaperFromLocal()
         } else if (
