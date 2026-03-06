@@ -151,17 +151,30 @@ browser.browserAction.onClicked.addListener((tab) => {
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
         case 'closeTab':
-            browser.storage.local
-                .set({ lastClosedTabURL: sender.tab.url })
-                .then(() => {
-                    browser.tabs.remove(sender.tab.id)
-                })
-            setTimeout(function () {
-                if (!updatedEventTriggered) {
-                    browser.tabs.create({ url: message.url })
+            ;(async () => {
+                try {
+                    if (!sender.tab?.id || !sender.tab?.url) {
+                        sendResponse({
+                            ok: false,
+                            error: 'Missing sender tab context'
+                        })
+                        return
+                    }
+                    await browser.storage.local.set({
+                        lastClosedTabURL: sender.tab.url
+                    })
+                    await browser.tabs.remove(sender.tab.id)
+                    sendResponse({ ok: true })
+                } catch (error) {
+                    sendResponse({
+                        ok: false,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : String(error)
+                    })
                 }
-            }, 1000)
-            updatedEventTriggered = false
+            })()
             break
         case 'updateTab':
             browser.tabs.update(sender.tab.id, { url: message.url })
@@ -275,6 +288,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })
             break
     }
+    return true
 })
 
 //

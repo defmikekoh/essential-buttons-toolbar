@@ -471,12 +471,21 @@ const buttonElements = {
         behavior: function () {
             window.stop()
             this.classList.add('pressed')
-            setTimeout(() => {
+            setTimeout(async () => {
                 this.classList.remove('pressed')
-                browser.runtime.sendMessage({
-                    action: 'closeTab',
-                    url: settings.homepageURL
-                })
+                try {
+                    const response = await browser.runtime.sendMessage({
+                        action: 'closeTab'
+                    })
+                    if (!response?.ok) {
+                        console.error(
+                            'Failed to close tab from toolbar',
+                            response?.error || 'Unknown error'
+                        )
+                    }
+                } catch (error) {
+                    console.error('Failed to close tab from toolbar', error)
+                }
             }, 100)
         }
     },
