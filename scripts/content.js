@@ -47,6 +47,36 @@ function getViewportMetrics() {
     }
 }
 
+function setImportantStyle(element, property, value) {
+    element.style.setProperty(property, value, 'important')
+}
+
+function protectInjectedElement(element, display) {
+    const protectedStyles = {
+        display,
+        position: 'fixed',
+        'z-index': '2147483647',
+        margin: '0',
+        padding: '0',
+        'min-height': 'unset',
+        'max-height': 'unset',
+        'min-width': 'unset',
+        'max-width': 'unset',
+        border: '0',
+        background: 'transparent',
+        'border-radius': '0',
+        transform: 'none',
+        opacity: '1',
+        visibility: 'visible',
+        'pointer-events': 'auto',
+        isolation: 'isolate'
+    }
+
+    Object.entries(protectedStyles).forEach(([property, value]) => {
+        setImportantStyle(element, property, value)
+    })
+}
+
 //
 // Get settings
 //
@@ -112,6 +142,15 @@ function appendToolbarAndResolve(resolve) {
             'pointer-events: none; height: 50%; width: 50%; margin: auto'
         unhideIcon.style =
             'display: flex; position: fixed; z-index: 2147483647; margin: 0; padding: 0; border: 2px solid #38373f !important; background: rgba(43, 42, 51, 0.8) !important; color-scheme: light; border-radius: 20%; box-sizing: border-box'
+        protectInjectedElement(unhideIcon, 'flex')
+        setImportantStyle(unhideIcon, 'border', '2px solid #38373f')
+        setImportantStyle(
+            unhideIcon,
+            'background',
+            'rgba(43, 42, 51, 0.8)'
+        )
+        setImportantStyle(unhideIcon, 'border-radius', '20%')
+        setImportantStyle(unhideIcon, 'box-sizing', 'border-box')
         unhideIcon.appendChild(img)
         document.body.insertAdjacentElement('beforeend', unhideIcon)
         makeDraggable(unhideIcon)
@@ -120,6 +159,8 @@ function appendToolbarAndResolve(resolve) {
         toolbarIframe = document.createElement('iframe')
         toolbarIframe.style =
             'display: block !important; height: 0; position: fixed; z-index: 2147483647; margin: 0; padding: 0; min-height: unset; max-height: unset; min-width: unset; max-width: unset; border: 0; background: transparent; color-scheme: light; border-radius: 0'
+        protectInjectedElement(toolbarIframe, 'block')
+        setImportantStyle(toolbarIframe, 'height', '0')
         toolbarIframe.src = browser.runtime.getURL('pages/toolbar.html')
         toolbarIframe.setAttribute('id', 'essBtnsToolbar')
         document.body.insertAdjacentElement('afterend', toolbarIframe)
@@ -250,20 +291,20 @@ function updateToolbarHeight() {
         ? Math.floor(settings.topBottomMargin / metrics.scale)
         : 0
     if (iframeHidden) {
-        unhideIcon.style.height = `${calculatedHeight}px`
-        unhideIcon.style.width = `${calculatedHeight}px`
-        unhideIcon.style.left = `${
+        setImportantStyle(unhideIcon, 'height', `${calculatedHeight}px`)
+        setImportantStyle(unhideIcon, 'width', `${calculatedHeight}px`)
+        setImportantStyle(unhideIcon, 'left', `${
             Math.round(
                 metrics.offsetLeft +
                     metrics.width -
                     calculatedHeight * 1.5
             )
-        }px`
+        }px`)
         settings.defaultPosition === 'top'
-            ? (unhideIcon.style.top = `${
+            ? setImportantStyle(unhideIcon, 'top', `${
                   Math.round(metrics.offsetTop + calculatedHeight * 1.5)
               }px`)
-            : (unhideIcon.style.top = `${
+            : setImportantStyle(unhideIcon, 'top', `${
                   Math.round(
                       metrics.offsetTop +
                           metrics.height -
@@ -300,12 +341,12 @@ function updateToolbarHeight() {
                       metrics.height -
                       calculatedHeight -
                       margin
-            toolbarIframe.style.left = `${Math.round(left)}px`
-            toolbarIframe.style.top = `${Math.round(top)}px`
-            toolbarIframe.style.right = 'unset'
-            toolbarIframe.style.bottom = 'unset'
-            toolbarIframe.style.transform = 'none'
-            toolbarIframe.style.margin = '0'
+            setImportantStyle(toolbarIframe, 'left', `${Math.round(left)}px`)
+            setImportantStyle(toolbarIframe, 'top', `${Math.round(top)}px`)
+            setImportantStyle(toolbarIframe, 'right', 'unset')
+            setImportantStyle(toolbarIframe, 'bottom', 'unset')
+            setImportantStyle(toolbarIframe, 'transform', 'none')
+            setImportantStyle(toolbarIframe, 'margin', '0')
         } else {
             const heightPx = Math.round(
                 (toolbarWidthPercent / 100) * metrics.height
@@ -333,12 +374,12 @@ function updateToolbarHeight() {
                       metrics.width -
                       calculatedHeight -
                       margin
-            toolbarIframe.style.left = `${Math.round(left)}px`
-            toolbarIframe.style.top = `${Math.round(top)}px`
-            toolbarIframe.style.right = 'unset'
-            toolbarIframe.style.bottom = 'unset'
-            toolbarIframe.style.transform = 'none'
-            toolbarIframe.style.margin = '0'
+            setImportantStyle(toolbarIframe, 'left', `${Math.round(left)}px`)
+            setImportantStyle(toolbarIframe, 'top', `${Math.round(top)}px`)
+            setImportantStyle(toolbarIframe, 'right', 'unset')
+            setImportantStyle(toolbarIframe, 'bottom', 'unset')
+            setImportantStyle(toolbarIframe, 'transform', 'none')
+            setImportantStyle(toolbarIframe, 'margin', '0')
         }
     }
 }
@@ -525,8 +566,8 @@ const buttonElements = {
                     toolbarIframe.style.bottom === '0px' &&
                     toolbarDiv.classList.contains('horizontal')
                 ) {
-                    toolbarIframe.style.bottom = 'unset'
-                    toolbarIframe.style.top = '0px'
+                    setImportantStyle(toolbarIframe, 'bottom', 'unset')
+                    setImportantStyle(toolbarIframe, 'top', '0px')
                     toolbarDiv.style.bottom = 'unset'
                     toolbarDiv.style.top = '0'
                     menuDiv.style.top = 'unset'
@@ -543,8 +584,8 @@ const buttonElements = {
                     toolbarIframe.style.top === '0px' &&
                     toolbarDiv.classList.contains('horizontal')
                 ) {
-                    toolbarIframe.style.top = 'unset'
-                    toolbarIframe.style.bottom = '0px'
+                    setImportantStyle(toolbarIframe, 'top', 'unset')
+                    setImportantStyle(toolbarIframe, 'bottom', '0px')
                     toolbarDiv.style.bottom = '0'
                     toolbarDiv.style.top = 'unset'
                     menuDiv.style.top = '0'
@@ -561,8 +602,8 @@ const buttonElements = {
                     toolbarIframe.style.left === '0px' &&
                     toolbarDiv.classList.contains('vertical')
                 ) {
-                    toolbarIframe.style.left = 'unset'
-                    toolbarIframe.style.right = '0px'
+                    setImportantStyle(toolbarIframe, 'left', 'unset')
+                    setImportantStyle(toolbarIframe, 'right', '0px')
                     toolbarDiv.style.right = '0'
                     toolbarDiv.style.left = 'unset'
                     menuDiv.style.left = '0'
@@ -576,8 +617,8 @@ const buttonElements = {
                     }
                     if (chevronUp) chevronUp.style.transform = 'rotate(270deg)'
                 } else {
-                    toolbarIframe.style.right = 'unset'
-                    toolbarIframe.style.left = '0px'
+                    setImportantStyle(toolbarIframe, 'right', 'unset')
+                    setImportantStyle(toolbarIframe, 'left', '0px')
                     toolbarDiv.style.left = '0'
                     toolbarDiv.style.right = 'unset'
                     menuDiv.style.right = '0'
@@ -1094,10 +1135,10 @@ function handleScroll() {
             return
         }
         if (prevScrollPos > currentScrollPos && !iframeVisible) {
-            toolbarIframe.style.display = 'block'
+            setImportantStyle(toolbarIframe, 'display', 'block')
             iframeVisible = true
         } else if (prevScrollPos < currentScrollPos && iframeVisible) {
-            toolbarIframe.style.display = 'none'
+            setImportantStyle(toolbarIframe, 'display', 'none')
             iframeVisible = false
         }
     }
@@ -1119,10 +1160,10 @@ function handleTouchMove(event) {
             return
         }
         if (prevTouchY < currentTouchY && !iframeHidden && !iframeVisible) {
-            toolbarIframe.style.display = 'block'
+            setImportantStyle(toolbarIframe, 'display', 'block')
             iframeVisible = true
         } else if (prevTouchY > currentTouchY && iframeVisible) {
-            toolbarIframe.style.display = 'none'
+            setImportantStyle(toolbarIframe, 'display', 'none')
             iframeVisible = false
         }
     }
