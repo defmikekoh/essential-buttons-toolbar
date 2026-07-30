@@ -16,7 +16,10 @@ let menuButtonFlag
 let hideMethodInUse
 let isThrottled
 let prevScrollPos
+let currentPosition
+let viewportUpdateFrame = null
 const settings = {}
+const toolbarGeometry = globalThis.ToolbarGeometry
 const isPrivate = browser.extension.inIncognitoContext
 const buttonsToDisable = [
     'duplicateTabButton',
@@ -105,6 +108,9 @@ function getSettingsValues() {
         keys.forEach((key) => {
             settings[key] = result[key]
         })
+        currentPosition = toolbarGeometry.normalizePosition(
+            settings.defaultPosition
+        )
     })
 }
 
@@ -200,203 +206,158 @@ function applyColorSchemeToIframe(iframe) {
 
 function styleToolbarDivs() {
     toolbarDiv.style.opacity = settings.toolbarTransparency
-    if (settings.defaultPosition === 'top') {
-        toolbarIframe.style.cssText += `width: ${settings.toolbarWidth}vw !important;`
-        toolbarDiv.classList.add('horizontal')
-        menuDiv.classList.add('horizontal')
+    const isHorizontal =
+        toolbarGeometry.isHorizontalPosition(currentPosition)
+    toolbarDiv.classList.toggle('horizontal', isHorizontal)
+    menuDiv.classList.toggle('horizontal', isHorizontal)
+    toolbarDiv.classList.toggle('vertical', !isHorizontal)
+    menuDiv.classList.toggle('vertical', !isHorizontal)
+
+    if (isHorizontal) {
         toolbarDiv.style.height = '100%'
         menuDiv.style.height = '50%'
-        toolbarDiv.style.top = '0'
-        menuDiv.style.bottom = '0'
+        toolbarDiv.style.width = ''
+        menuDiv.style.width = ''
         toolbarButtons.forEach((toolbarButton) => {
             toolbarButton.style.height = '100%'
+            toolbarButton.style.width = ''
         })
-        if (Number(settings.toolbarWidth) === 100) {
-            toolbarDiv.style.borderWidth = '0 0 2px'
-            menuDiv.style.borderWidth = '0 0 2px'
-        } else {
-            toolbarDiv.style.borderWidth = '0 2px 2px'
-            menuDiv.style.borderWidth = '0 2px 2px'
-        }
-    } else if (settings.defaultPosition === 'bottom') {
-        toolbarIframe.style.cssText += `width: ${settings.toolbarWidth}vw !important;`
-        toolbarDiv.classList.add('horizontal')
-        menuDiv.classList.add('horizontal')
-        toolbarDiv.style.height = '100%'
-        menuDiv.style.height = '50%'
-        toolbarDiv.style.bottom = '0'
-        menuDiv.style.top = '0'
-        toolbarButtons.forEach((toolbarButton) => {
-            toolbarButton.style.height = '100%'
-        })
-        if (Number(settings.toolbarWidth) === 100) {
-            toolbarDiv.style.borderWidth = '2px 0 0'
-            menuDiv.style.borderWidth = '2px 0 0'
-        } else {
-            toolbarDiv.style.borderWidth = '2px 2px 0'
-            menuDiv.style.borderWidth = '2px 2px 0'
-        }
-    } else if (settings.defaultPosition === 'left') {
-        toolbarIframe.style.cssText += `height: ${settings.toolbarWidth}vh !important;`
-        toolbarDiv.classList.add('vertical')
-        menuDiv.classList.add('vertical')
-        toolbarDiv.style.width = '100%'
-        menuDiv.style.width = '50%'
-        toolbarDiv.style.left = '0'
-        menuDiv.style.right = '0'
-        toolbarButtons.forEach((toolbarButton) => {
-            toolbarButton.style.width = '100%'
-        })
-        if (Number(settings.toolbarWidth) === 100) {
-            toolbarDiv.style.borderWidth = '0 2px 0 0'
-            menuDiv.style.borderWidth = '0 2px 0 0'
-        } else {
-            toolbarDiv.style.borderWidth = '2px 2px 2px 0'
-            menuDiv.style.borderWidth = '2px 2px 2px 0'
-        }
     } else {
-        toolbarIframe.style.cssText += `height: ${settings.toolbarWidth}vh !important;`
-        toolbarDiv.classList.add('vertical')
-        menuDiv.classList.add('vertical')
         toolbarDiv.style.width = '100%'
         menuDiv.style.width = '50%'
-        toolbarDiv.style.right = '0'
-        menuDiv.style.left = '0'
+        toolbarDiv.style.height = ''
+        menuDiv.style.height = ''
         toolbarButtons.forEach((toolbarButton) => {
             toolbarButton.style.width = '100%'
+            toolbarButton.style.height = ''
         })
-        if (Number(settings.toolbarWidth) === 100) {
-            toolbarDiv.style.borderWidth = '0 0 0 2px'
-            menuDiv.style.borderWidth = '0 0 0 2px'
-        } else {
-            toolbarDiv.style.borderWidth = '2px 0 2px 2px'
-            menuDiv.style.borderWidth = '2px 0 2px 2px'
-        }
     }
+
+    applyToolbarEdgeStyles()
     if (isPrivate) {
         toolbarDiv.style.backgroundColor = `rgba(var(--private-background), ${settings.toolbarTransparency})`
     }
 }
 
-function updateToolbarHeight() {
-    const metrics = getViewportMetrics()
-    const calculatedHeight = calculateToolbarHeight()
-    const toolbarWidthPercent = Number(settings.toolbarWidth) || 0
-    const parsedPositionPercent = Number(settings.toolbarPositionPercent)
-    const positionPercent = Math.max(
-        0,
-        Math.min(100, Number.isFinite(parsedPositionPercent) ? parsedPositionPercent : 50)
+function applyToolbarEdgeStyles() {
+    const position = toolbarGeometry.normalizePosition(currentPosition)
+    const requestedWidth = Number(settings.toolbarWidth)
+    const isFullLength =
+        !Number.isFinite(requestedWidth) || requestedWidth >= 100
+    const borderWidths = {
+        top: isFullLength ? '0 0 2px' : '0 2px 2px',
+        bottom: isFullLength ? '2px 0 0' : '2px 2px 0',
+        left: isFullLength ? '0 2px 0 0' : '2px 2px 2px 0',
+        right: isFullLength ? '0 0 0 2px' : '2px 0 2px 2px'
+    }
+
+    const positionedElements = [toolbarDiv, menuDiv]
+    positionedElements.forEach((element) => {
+        element.style.top = 'unset'
+        element.style.right = 'unset'
+        element.style.bottom = 'unset'
+        element.style.left = 'unset'
+        element.style.borderWidth = borderWidths[position]
+    })
+
+    if (position === 'top') {
+        toolbarDiv.style.top = '0'
+        menuDiv.style.bottom = '0'
+    } else if (position === 'bottom') {
+        toolbarDiv.style.bottom = '0'
+        menuDiv.style.top = '0'
+    } else if (position === 'left') {
+        toolbarDiv.style.left = '0'
+        menuDiv.style.right = '0'
+    } else {
+        toolbarDiv.style.right = '0'
+        menuDiv.style.left = '0'
+    }
+
+    updateMoveToolbarIcon()
+}
+
+function updateMoveToolbarIcon(button) {
+    const moveToolbarButton =
+        button ||
+        iframeDocument?.querySelector('[data-button="moveToolbarButton"]')
+    const chevronUp = moveToolbarButton?.querySelector(
+        `svg.chevron-up.${settings.iconTheme}`
     )
-    const margin = Number(settings.topBottomMargin)
-        ? Math.floor(settings.topBottomMargin / metrics.scale)
-        : 0
+    if (!chevronUp) return
+
+    const rotations = {
+        top: '180deg',
+        bottom: '0deg',
+        left: '90deg',
+        right: '270deg'
+    }
+    chevronUp.style.transform = `rotate(${rotations[currentPosition]})`
+}
+
+function updateToolbarGeometry() {
+    const metrics = getViewportMetrics()
+    const toolbarThickness = calculateToolbarThickness()
+    const requestedGap = Number(settings.topBottomMargin)
+    const edgeGap =
+        Number.isFinite(requestedGap) && requestedGap > 0
+            ? Math.floor(requestedGap / metrics.scale)
+            : 0
+
     if (iframeHidden) {
-        setImportantStyle(unhideIcon, 'height', `${calculatedHeight}px`)
-        setImportantStyle(unhideIcon, 'width', `${calculatedHeight}px`)
+        setImportantStyle(unhideIcon, 'height', `${toolbarThickness}px`)
+        setImportantStyle(unhideIcon, 'width', `${toolbarThickness}px`)
         setImportantStyle(unhideIcon, 'left', `${
             Math.round(
                 metrics.offsetLeft +
                     metrics.width -
-                    calculatedHeight * 1.5
+                    toolbarThickness * 1.5
             )
         }px`)
-        settings.defaultPosition === 'top'
+        currentPosition === 'top'
             ? setImportantStyle(unhideIcon, 'top', `${
-                  Math.round(metrics.offsetTop + calculatedHeight * 1.5)
+                  Math.round(metrics.offsetTop + toolbarThickness * 1.5)
               }px`)
             : setImportantStyle(unhideIcon, 'top', `${
                   Math.round(
                       metrics.offsetTop +
                           metrics.height -
-                          calculatedHeight * 2.5
+                          toolbarThickness * 2.5
                   )
               }px`)
-    } else {
-        if (
-            settings.defaultPosition === 'top' ||
-            settings.defaultPosition === 'bottom'
-        ) {
-            const widthPx = Math.round(
-                (toolbarWidthPercent / 100) * metrics.width
-            )
-            toolbarIframe.style.setProperty(
-                'width',
-                `${widthPx}px`,
-                'important'
-            )
-            toolbarIframe.style.setProperty(
-                'height',
-                `${calculatedHeight}px`,
-                'important'
-            )
-            const left =
-                metrics.offsetLeft +
-                Math.round(
-                    (positionPercent / 100) * Math.max(0, metrics.width - widthPx)
-                )
-            const top =
-                settings.defaultPosition === 'top'
-                    ? metrics.offsetTop + margin
-                    : metrics.offsetTop +
-                      metrics.height -
-                      calculatedHeight -
-                      margin
-            setImportantStyle(toolbarIframe, 'left', `${Math.round(left)}px`)
-            setImportantStyle(toolbarIframe, 'top', `${Math.round(top)}px`)
-            setImportantStyle(toolbarIframe, 'right', 'unset')
-            setImportantStyle(toolbarIframe, 'bottom', 'unset')
-            setImportantStyle(toolbarIframe, 'transform', 'none')
-            setImportantStyle(toolbarIframe, 'margin', '0')
-        } else {
-            const heightPx = Math.round(
-                (toolbarWidthPercent / 100) * metrics.height
-            )
-            toolbarIframe.style.setProperty(
-                'height',
-                `${heightPx}px`,
-                'important'
-            )
-            toolbarIframe.style.setProperty(
-                'width',
-                `${calculatedHeight}px`,
-                'important'
-            )
-            const top =
-                metrics.offsetTop +
-                Math.round(
-                    (positionPercent / 100) *
-                        Math.max(0, metrics.height - heightPx)
-                )
-            const left =
-                settings.defaultPosition === 'left'
-                    ? metrics.offsetLeft + margin
-                    : metrics.offsetLeft +
-                      metrics.width -
-                      calculatedHeight -
-                      margin
-            setImportantStyle(toolbarIframe, 'left', `${Math.round(left)}px`)
-            setImportantStyle(toolbarIframe, 'top', `${Math.round(top)}px`)
-            setImportantStyle(toolbarIframe, 'right', 'unset')
-            setImportantStyle(toolbarIframe, 'bottom', 'unset')
-            setImportantStyle(toolbarIframe, 'transform', 'none')
-            setImportantStyle(toolbarIframe, 'margin', '0')
-        }
+        return
     }
+
+    const rect = toolbarGeometry.calculateRect({
+        viewport: metrics,
+        position: currentPosition,
+        thickness: toolbarThickness,
+        lengthPercent: settings.toolbarWidth,
+        positionPercent: settings.toolbarPositionPercent,
+        edgeGap
+    })
+    setImportantStyle(toolbarIframe, 'width', `${rect.width}px`)
+    setImportantStyle(toolbarIframe, 'height', `${rect.height}px`)
+    setImportantStyle(toolbarIframe, 'left', `${rect.left}px`)
+    setImportantStyle(toolbarIframe, 'top', `${rect.top}px`)
+    setImportantStyle(toolbarIframe, 'right', 'unset')
+    setImportantStyle(toolbarIframe, 'bottom', 'unset')
+    setImportantStyle(toolbarIframe, 'transform', 'none')
+    setImportantStyle(toolbarIframe, 'margin', '0')
 }
 
-function calculateToolbarHeight() {
+function calculateToolbarThickness() {
     const metrics = getViewportMetrics()
-    if (iframeHidden) {
-        return (calculatedHeight = Math.floor(
-            settings.toolbarHeight / metrics.scale
-        ))
-    } else {
-        return (calculatedHeight = menuDivHidden
-            ? Math.floor(settings.toolbarHeight / metrics.scale)
-            : Math.floor(
-                  (settings.toolbarHeight / metrics.scale) * 2
-              ))
-    }
+    const requestedHeight = Number(settings.toolbarHeight)
+    const toolbarHeight =
+        Number.isFinite(requestedHeight) && requestedHeight > 0
+            ? requestedHeight
+            : 42
+    const menuMultiplier = iframeHidden || menuDivHidden ? 1 : 2
+    return Math.max(
+        1,
+        Math.floor((toolbarHeight / metrics.scale) * menuMultiplier)
+    )
 }
 
 function closeMenu() {
@@ -408,7 +369,7 @@ function closeMenu() {
         } else {
             toolbarDiv.style.width = '100%'
         }
-        updateToolbarHeight()
+        updateToolbarGeometry()
         menuButtonFlag.classList.remove('pressed')
     }
 }
@@ -502,7 +463,7 @@ const buttonElements = {
                 }
                 menuDiv.style.display = 'flex'
                 menuButtonFlag = this
-                updateToolbarHeight()
+                updateToolbarGeometry()
             } else {
                 closeMenu()
             }
@@ -548,8 +509,8 @@ const buttonElements = {
             this.classList.add('pressed')
             setTimeout(() => {
                 this.classList.remove('pressed')
-                iframeHidden = true
                 closeMenu()
+                iframeHidden = true
                 initializeToolbar()
             }, 100)
         }
@@ -558,80 +519,11 @@ const buttonElements = {
         behavior: function () {
             this.classList.add('pressed')
             setTimeout(() => {
-                const chevronUp = this.querySelector(
-                    `svg.chevron-up.${settings.iconTheme}`
-                )
                 closeMenu()
-                if (
-                    toolbarIframe.style.bottom === '0px' &&
-                    toolbarDiv.classList.contains('horizontal')
-                ) {
-                    setImportantStyle(toolbarIframe, 'bottom', 'unset')
-                    setImportantStyle(toolbarIframe, 'top', '0px')
-                    toolbarDiv.style.bottom = 'unset'
-                    toolbarDiv.style.top = '0'
-                    menuDiv.style.top = 'unset'
-                    menuDiv.style.bottom = '0'
-                    if (Number(settings.toolbarWidth) === 100) {
-                        toolbarDiv.style.borderWidth = '0 0 2px'
-                        menuDiv.style.borderWidth = '0 0 2px'
-                    } else {
-                        toolbarDiv.style.borderWidth = '0 2px 2px'
-                        menuDiv.style.borderWidth = '0 2px 2px'
-                    }
-                    if (chevronUp) chevronUp.style.transform = 'rotate(180deg)'
-                } else if (
-                    toolbarIframe.style.top === '0px' &&
-                    toolbarDiv.classList.contains('horizontal')
-                ) {
-                    setImportantStyle(toolbarIframe, 'top', 'unset')
-                    setImportantStyle(toolbarIframe, 'bottom', '0px')
-                    toolbarDiv.style.bottom = '0'
-                    toolbarDiv.style.top = 'unset'
-                    menuDiv.style.top = '0'
-                    menuDiv.style.bottom = 'unset'
-                    if (Number(settings.toolbarWidth) === 100) {
-                        toolbarDiv.style.borderWidth = '2px 0 0'
-                        menuDiv.style.borderWidth = '2px 0 0'
-                    } else {
-                        toolbarDiv.style.borderWidth = '2px 2px 0'
-                        menuDiv.style.borderWidth = '2px 2px 0'
-                    }
-                    if (chevronUp) chevronUp.style.transform = 'rotate(0deg)'
-                } else if (
-                    toolbarIframe.style.left === '0px' &&
-                    toolbarDiv.classList.contains('vertical')
-                ) {
-                    setImportantStyle(toolbarIframe, 'left', 'unset')
-                    setImportantStyle(toolbarIframe, 'right', '0px')
-                    toolbarDiv.style.right = '0'
-                    toolbarDiv.style.left = 'unset'
-                    menuDiv.style.left = '0'
-                    menuDiv.style.right = 'unset'
-                    if (Number(settings.toolbarWidth) === 100) {
-                        toolbarDiv.style.borderWidth = '0 0 0 2px'
-                        menuDiv.style.borderWidth = '0 0 0 2px'
-                    } else {
-                        toolbarDiv.style.borderWidth = '2px 0 2px 2px'
-                        menuDiv.style.borderWidth = '2px 0 2px 2px'
-                    }
-                    if (chevronUp) chevronUp.style.transform = 'rotate(270deg)'
-                } else {
-                    setImportantStyle(toolbarIframe, 'right', 'unset')
-                    setImportantStyle(toolbarIframe, 'left', '0px')
-                    toolbarDiv.style.left = '0'
-                    toolbarDiv.style.right = 'unset'
-                    menuDiv.style.right = '0'
-                    menuDiv.style.left = 'unset'
-                    if (Number(settings.toolbarWidth) === 100) {
-                        toolbarDiv.style.borderWidth = '0 2px 0 0'
-                        menuDiv.style.borderWidth = '0 2px 0 0'
-                    } else {
-                        toolbarDiv.style.borderWidth = '2px 2px 2px 0'
-                        menuDiv.style.borderWidth = '2px 2px 2px 0'
-                    }
-                    if (chevronUp) chevronUp.style.transform = 'rotate(90deg)'
-                }
+                currentPosition =
+                    toolbarGeometry.getOppositePosition(currentPosition)
+                applyToolbarEdgeStyles()
+                updateToolbarGeometry()
                 this.classList.remove('pressed')
             }, 100)
         }
@@ -951,16 +843,7 @@ function toggleButtonVisibility() {
                     break
                 case 'moveToolbarButton':
                     showSVG(svgs, settings.iconTheme)
-                    const chevronUp = button.querySelector(
-                        `svg.chevron-up.${settings.iconTheme}`
-                    )
-                    if (settings.defaultPosition === 'top') {
-                        chevronUp.style.transform = 'rotate(180deg)'
-                    } else if (settings.defaultPosition === 'left') {
-                        chevronUp.style.transform = 'rotate(90deg)'
-                    } else if (settings.defaultPosition === 'right') {
-                        chevronUp.style.transform = 'rotate(270deg)'
-                    }
+                    updateMoveToolbarIcon(button)
                     break
                 case 'toggleDesktopSiteButton':
                     browser.storage.local
@@ -1195,15 +1078,51 @@ function hideOnScroll() {
 //
 // Initialize toolbar
 //
+function scheduleToolbarGeometryUpdate() {
+    if (viewportUpdateFrame !== null) return
+    viewportUpdateFrame = window.requestAnimationFrame(() => {
+        viewportUpdateFrame = null
+        updateToolbarGeometry()
+    })
+}
+
+function addViewportListeners() {
+    window.addEventListener('resize', scheduleToolbarGeometryUpdate)
+    window.visualViewport?.addEventListener(
+        'resize',
+        scheduleToolbarGeometryUpdate
+    )
+    window.visualViewport?.addEventListener(
+        'scroll',
+        scheduleToolbarGeometryUpdate
+    )
+}
+
+function removeViewportListeners() {
+    window.removeEventListener('resize', scheduleToolbarGeometryUpdate)
+    window.visualViewport?.removeEventListener(
+        'resize',
+        scheduleToolbarGeometryUpdate
+    )
+    window.visualViewport?.removeEventListener(
+        'scroll',
+        scheduleToolbarGeometryUpdate
+    )
+    if (viewportUpdateFrame !== null) {
+        window.cancelAnimationFrame(viewportUpdateFrame)
+        viewportUpdateFrame = null
+    }
+}
+
 function removeToolbar() {
     const targetElement =
         document.getElementById('essUnhideIcon') ||
         document.getElementById('essBtnsToolbar')
     closeMenu()
+    removeViewportListeners()
+    window.removeEventListener('load', checkExistenceAndHeight)
     if (targetElement) {
         targetElement.remove()
-        window.removeEventListener('load', checkExistenceAndHeight)
-        window.visualViewport.removeEventListener('resize', updateToolbarHeight)
     }
 }
 
@@ -1220,9 +1139,15 @@ function checkExistenceAndHeight() {
             initializeToolbar()
             return
         }
-        const calculatedHeight = calculateToolbarHeight()
-        if (targetElement.getBoundingClientRect().height !== calculatedHeight) {
-            updateToolbarHeight()
+        const expectedThickness = calculateToolbarThickness()
+        const targetRect = targetElement.getBoundingClientRect()
+        const actualThickness =
+            iframeHidden ||
+            toolbarGeometry.isHorizontalPosition(currentPosition)
+                ? targetRect.height
+                : targetRect.width
+        if (actualThickness !== expectedThickness) {
+            updateToolbarGeometry()
         }
         window.removeEventListener('load', checkExistenceAndHeight)
     }, 2000)
@@ -1243,15 +1168,12 @@ async function initializeToolbar() {
         })
         if (!isCurrentPageExcluded) {
             await appendToolbar()
-            updateToolbarHeight()
+            updateToolbarGeometry()
             window.addEventListener('load', checkExistenceAndHeight)
             toggleButtonVisibility()
             appendButtons()
             hideOnScroll()
-            window.visualViewport.addEventListener(
-                'resize',
-                updateToolbarHeight
-            )
+            addViewportListeners()
         }
     })
 }

@@ -23,7 +23,7 @@
     "content_scripts": [
         {
             "matches": ["<all_urls>"],
-            "js": ["scripts/content.js"],
+            "js": ["scripts/toolbarGeometry.js", "scripts/content.js"],
             "run_at": "document_start"
         }
     ],
