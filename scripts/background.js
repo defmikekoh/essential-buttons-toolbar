@@ -148,21 +148,61 @@ browser.browserAction.onClicked.addListener((tab) => {
     })
 })
 
+// Keep Undo usable while storage is slow. Serialize persistence so an older
+// write cannot overwrite a newer close or resurrect history after Undo.
+let lastClosedTabURLs
+let undoStorageQueue = Promise.resolve()
+const undoStorageWaitMs = 100
+
+function saveUndoHistory(urls) {
+    lastClosedTabURLs = urls
+    undoStorageQueue = undoStorageQueue.then(() =>
+        urls === null
+            ? browser.storage.local.remove('lastClosedTabURL')
+            : browser.storage.local.set({ lastClosedTabURL: urls })
+    ).catch((error) => {
+        console.warn('Could not persist toolbar Undo history', error)
+    })
+
+    // Give normal writes time to survive background suspension, but never let
+    // a stalled write prevent closing. The queued write may still finish later.
+    return new Promise((resolve) => {
+        const timer = setTimeout(resolve, undoStorageWaitMs)
+        undoStorageQueue.then(() => {
+            clearTimeout(timer)
+            resolve()
+        })
+    })
+}
+
+async function undoCloseTab() {
+    if (lastClosedTabURLs === undefined) {
+        const result = await browser.storage.local.get('lastClosedTabURL')
+        // A close may have arrived while the initial read was pending.
+        if (lastClosedTabURLs === undefined) {
+            lastClosedTabURLs = result.lastClosedTabURL || null
+        }
+    }
+    const history = lastClosedTabURLs
+    if (!history) return
+    const urls = Array.isArray(history) ? history : [history]
+    const saved = saveUndoHistory(null)
+    await Promise.all([...urls.map((url) => browser.tabs.create({ url })), saved])
+}
+
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     switch (message.action) {
         case 'closeTab':
             ;(async () => {
                 try {
-                    if (!sender.tab?.id || !sender.tab?.url) {
+                    if (!Number.isInteger(sender.tab?.id) || sender.tab.id < 0) {
                         sendResponse({
                             ok: false,
                             error: 'Missing sender tab context'
                         })
                         return
                     }
-                    await browser.storage.local.set({
-                        lastClosedTabURL: sender.tab.url
-                    })
+                    if (sender.tab.url) await saveUndoHistory(sender.tab.url)
                     await browser.tabs.remove(sender.tab.id)
                     sendResponse({ ok: true })
                 } catch (error) {
@@ -207,25 +247,14 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
             })
             return true
         case 'undoCloseTab':
-            browser.storage.local.get('lastClosedTabURL').then((result) => {
-                if (result.lastClosedTabURL) {
-                    let urls = Array.isArray(result.lastClosedTabURL)
-                        ? result.lastClosedTabURL
-                        : [result.lastClosedTabURL]
-                    if (urls.length > 0) {
-                        urls.forEach((url) => {
-                            browser.tabs.create({ url: url })
-                        })
-                        browser.storage.local.remove('lastClosedTabURL')
-                    }
-                }
+            undoCloseTab().catch((error) => {
+                console.error('Failed to undo close from toolbar', error)
             })
             break
         case 'closeAllTabs':
             browser.tabs.query({}, function (tabs) {
                 const closedTabURLs = tabs.map((tab) => tab.url)
-                browser.storage.local
-                    .set({ lastClosedTabURL: closedTabURLs })
+                saveUndoHistory(closedTabURLs)
                     .then(() => {
                         const tabIds = tabs.map((tab) => tab.id)
                         browser.tabs.remove(tabIds)
@@ -244,8 +273,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     (tab) => tab.id !== sender.tab.id
                 )
                 const closedTabURLs = tabsToClose.map((tab) => tab.url)
-                browser.storage.local
-                    .set({ lastClosedTabURL: closedTabURLs })
+                saveUndoHistory(closedTabURLs)
                     .then(() => {
                         const tabIds = tabsToClose.map((tab) => tab.id)
                         browser.tabs.remove(tabIds)

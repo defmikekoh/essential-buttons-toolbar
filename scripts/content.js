@@ -421,34 +421,39 @@ function unhideToolbar() {
 //
 // Buttons
 //
+// Feedback must never delay dispatching a toolbar action.
+const buttonFeedbackTimers = new WeakMap()
+function flashButton(button) {
+    clearTimeout(buttonFeedbackTimers.get(button))
+    button.classList.add('pressed')
+    buttonFeedbackTimers.set(button, setTimeout(() => {
+        button.classList.remove('pressed')
+        buttonFeedbackTimers.delete(button)
+    }, 100))
+}
+
 const buttonElements = {
     homeButton: {
         behavior: function () {
             window.stop()
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({
-                    action: 'updateTab',
-                    url: settings.homepageURL
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({
+                action: 'updateTab',
+                url: settings.homepageURL
+            })
         }
     },
     duplicateTabButton: {
         behavior: function (e) {
             e.preventDefault()
             let updatedUrl = window.location.href
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({
-                    action: 'duplicateTab',
-                    url: updatedUrl
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({
+                action: 'duplicateTab',
+                url: updatedUrl
+            })
         }
     },
     menuButton: {
@@ -470,62 +475,50 @@ const buttonElements = {
         }
     },
     closeTabButton: {
-        behavior: function () {
+        behavior: async function () {
             window.stop()
-            this.classList.add('pressed')
-            setTimeout(async () => {
-                this.classList.remove('pressed')
-                try {
-                    const response = await browser.runtime.sendMessage({
-                        action: 'closeTab'
-                    })
-                    if (!response?.ok) {
-                        console.error(
-                            'Failed to close tab from toolbar',
-                            response?.error || 'Unknown error'
-                        )
-                    }
-                } catch (error) {
-                    console.error('Failed to close tab from toolbar', error)
+            flashButton(this)
+            try {
+                const response = await browser.runtime.sendMessage({
+                    action: 'closeTab'
+                })
+                if (!response?.ok) {
+                    console.error(
+                        'Failed to close tab from toolbar',
+                        response?.error || 'Unknown error'
+                    )
                 }
-            }, 100)
+            } catch (error) {
+                console.error('Failed to close tab from toolbar', error)
+            }
         }
     },
     newTabButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({
-                    action: 'createTab',
-                    url: settings.newTabURL
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({
+                action: 'createTab',
+                url: settings.newTabURL
+            })
         }
     },
     hideButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                iframeHidden = true
-                initializeToolbar()
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            iframeHidden = true
+            initializeToolbar()
         }
     },
     moveToolbarButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                closeMenu()
-                currentPosition =
-                    toolbarGeometry.getOppositePosition(currentPosition)
-                applyToolbarEdgeStyles()
-                updateToolbarGeometry()
-                this.classList.remove('pressed')
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            currentPosition =
+                toolbarGeometry.getOppositePosition(currentPosition)
+            applyToolbarEdgeStyles()
+            updateToolbarGeometry()
         }
     },
     // devToolsButton: {
@@ -546,226 +539,181 @@ const buttonElements = {
     goBackButton: {
         behavior: function () {
             window.stop()
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({ action: 'goBack' })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({ action: 'goBack' })
         }
     },
     goForwardButton: {
         behavior: function () {
             window.stop()
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({ action: 'goForward' })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({ action: 'goForward' })
         }
     },
     reloadButton: {
         behavior: function () {
             window.stop()
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({ action: 'reload' })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({ action: 'reload' })
         }
     },
     settingsButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({ action: 'openSettings' })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({ action: 'openSettings' })
         }
     },
     undoCloseTabButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({ action: 'undoCloseTab' })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({ action: 'undoCloseTab' })
         }
     },
     scrollTopButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                findScrollableElement().scrollTo({ top: 0, behavior: 'smooth' })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            findScrollableElement().scrollTo({ top: 0, behavior: 'smooth' })
         }
     },
     scrollBottomButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                const element = findScrollableElement()
-                element.scrollTo({
-                    top: element.scrollHeight,
-                    behavior: 'smooth'
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            const element = findScrollableElement()
+            element.scrollTo({
+                top: element.scrollHeight,
+                behavior: 'smooth'
+            })
         }
     },
     pageUpButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                const element = findScrollableElement()
-                const overlapSetting = settings.pageUpDownScrollOverlap || 80
-                const offset = Math.max(window.innerHeight - overlapSetting, 10)
-                const targetTop = Math.max(0, element.scrollTop - offset)
-                element.scrollTo({
-                    top: targetTop,
-                    behavior: settings.pageUpDownScrollType
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            const element = findScrollableElement()
+            const overlapSetting = settings.pageUpDownScrollOverlap || 80
+            const offset = Math.max(window.innerHeight - overlapSetting, 10)
+            const targetTop = Math.max(0, element.scrollTop - offset)
+            element.scrollTo({
+                top: targetTop,
+                behavior: settings.pageUpDownScrollType
+            })
         },
         longPressBehavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                const element = findScrollableElement()
-                const overlapSetting =
-                    settings.pageUpDownScrollOverlapLongpress || 60
-                const offset = Math.max(window.innerHeight - overlapSetting, 10)
-                const targetTop = Math.max(0, element.scrollTop - offset)
-                element.scrollTo({
-                    top: targetTop,
-                    behavior: settings.pageUpDownScrollType
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            const element = findScrollableElement()
+            const overlapSetting =
+                settings.pageUpDownScrollOverlapLongpress || 60
+            const offset = Math.max(window.innerHeight - overlapSetting, 10)
+            const targetTop = Math.max(0, element.scrollTop - offset)
+            element.scrollTo({
+                top: targetTop,
+                behavior: settings.pageUpDownScrollType
+            })
         }
     },
     pageDownButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                const element = findScrollableElement()
-                const overlapSetting = settings.pageUpDownScrollOverlap || 80
-                const offset = Math.max(window.innerHeight - overlapSetting, 10)
-                const targetTop = Math.min(
-                    element.scrollHeight,
-                    element.scrollTop + offset
-                )
-                element.scrollTo({
-                    top: targetTop,
-                    behavior: settings.pageUpDownScrollType
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            const element = findScrollableElement()
+            const overlapSetting = settings.pageUpDownScrollOverlap || 80
+            const offset = Math.max(window.innerHeight - overlapSetting, 10)
+            const targetTop = Math.min(
+                element.scrollHeight,
+                element.scrollTop + offset
+            )
+            element.scrollTo({
+                top: targetTop,
+                behavior: settings.pageUpDownScrollType
+            })
         },
         longPressBehavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                const element = findScrollableElement()
-                const overlapSetting =
-                    settings.pageUpDownScrollOverlapLongpress || 60
-                const offset = Math.max(window.innerHeight - overlapSetting, 10)
-                const targetTop = Math.min(
-                    element.scrollHeight,
-                    element.scrollTop + offset
-                )
-                element.scrollTo({
-                    top: targetTop,
-                    behavior: settings.pageUpDownScrollType
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            const element = findScrollableElement()
+            const overlapSetting =
+                settings.pageUpDownScrollOverlapLongpress || 60
+            const offset = Math.max(window.innerHeight - overlapSetting, 10)
+            const targetTop = Math.min(
+                element.scrollHeight,
+                element.scrollTop + offset
+            )
+            element.scrollTo({
+                top: targetTop,
+                behavior: settings.pageUpDownScrollType
+            })
         }
     },
     closeAllTabsButton: {
         behavior: function () {
             window.stop()
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({
-                    action: 'closeAllTabs',
-                    url: settings.homepageURL
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({
+                action: 'closeAllTabs',
+                url: settings.homepageURL
+            })
         }
     },
     closeOtherTabsButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({ action: 'closeOtherTabs' })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            browser.runtime.sendMessage({ action: 'closeOtherTabs' })
         }
     },
     toggleDesktopSiteButton: {
         behavior: function () {
             window.stop()
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.storage.local.get('isDesktopSite').then((result) => {
-                    if (!result.isDesktopSite) {
-                        browser.storage.local
-                            .set({ isDesktopSite: true })
-                            .then(() => {
-                                browser.runtime.sendMessage({
-                                    action: 'toggleDesktopSite'
-                                })
+            flashButton(this)
+            closeMenu()
+            browser.storage.local.get('isDesktopSite').then((result) => {
+                if (!result.isDesktopSite) {
+                    browser.storage.local
+                        .set({ isDesktopSite: true })
+                        .then(() => {
+                            browser.runtime.sendMessage({
+                                action: 'toggleDesktopSite'
                             })
-                    } else {
-                        browser.storage.local
-                            .set({ isDesktopSite: false })
-                            .then(() => {
-                                browser.runtime.sendMessage({
-                                    action: 'toggleDesktopSite'
-                                })
+                        })
+                } else {
+                    browser.storage.local
+                        .set({ isDesktopSite: false })
+                        .then(() => {
+                            browser.runtime.sendMessage({
+                                action: 'toggleDesktopSite'
                             })
-                    }
-                })
-            }, 100)
+                        })
+                }
+            })
         }
     },
     openWithButton: {
         behavior: function () {
             window.stop()
-            this.classList.add('pressed')
+            flashButton(this)
             const currentUrl = window.location.href
             const scheme = currentUrl.split(':').shift()
             const shortUrl = currentUrl.split(':').pop()
             const intentUrl = `intent:${shortUrl}#Intent;action=android.intent.action.VIEW;scheme=${scheme};end`
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                browser.runtime.sendMessage({
-                    action: 'updateTab',
-                    url: intentUrl
-                })
-            }, 100)
+            closeMenu()
+            browser.runtime.sendMessage({
+                action: 'updateTab',
+                url: intentUrl
+            })
         }
     },
     copyLinkButton: {
         behavior: function () {
-            this.classList.add('pressed')
+            flashButton(this)
             const currentUrl = window.location.href
             navigator.clipboard
                 .writeText(currentUrl)
@@ -775,33 +723,24 @@ const buttonElements = {
                 .catch((err) => {
                     //error notification. Create function notify(text) 3s.
                 })
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-            }, 100)
+            closeMenu()
         }
     },
     addTopSiteButton: {
         behavior: function () {
-            this.classList.add('pressed')
+            flashButton(this)
             triggerAddTopSitePrompt()
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-            }, 100)
+            closeMenu()
         }
     },
     shareButton: {
         behavior: function () {
-            this.classList.add('pressed')
-            setTimeout(() => {
-                this.classList.remove('pressed')
-                closeMenu()
-                navigator.share({
-                    title: document.title,
-                    url: window.location.href
-                })
-            }, 100)
+            flashButton(this)
+            closeMenu()
+            navigator.share({
+                title: document.title,
+                url: window.location.href
+            })
         }
     }
     // Add more buttons
