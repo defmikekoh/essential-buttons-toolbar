@@ -18,6 +18,14 @@ let isThrottled
 let prevScrollPos
 let currentPosition
 let viewportUpdateFrame = null
+let lastUsableViewportMetrics
+let toolbarPresenceObserver
+let bodyObserver
+let initializationId = 0
+let toolbarAllowed = false
+let lifecycleListenersAdded = false
+let toolbarColorSchemeQuery
+let toolbarColorSchemeHandler
 const settings = {}
 const toolbarGeometry = globalThis.ToolbarGeometry
 const isPrivate = browser.extension.inIncognitoContext
@@ -32,22 +40,21 @@ const buttonsToDisable = [
 
 function getViewportMetrics() {
     const vv = window.visualViewport
-    if (!vv) {
-        return {
-            width: window.innerWidth,
-            height: window.innerHeight,
-            scale: 1,
-            offsetLeft: 0,
-            offsetTop: 0
+    const width = vv?.width > 0 ? vv.width : window.innerWidth || document.documentElement.clientWidth
+    const height = vv?.height > 0 ? vv.height : window.innerHeight || document.documentElement.clientHeight
+    if (!(width > 0) || !(height > 0)) {
+        return lastUsableViewportMetrics || {
+            width: 360, height: 640, scale: 1, offsetLeft: 0, offsetTop: 0
         }
     }
-    return {
-        width: vv.width,
-        height: vv.height,
-        scale: vv.scale || 1,
-        offsetLeft: vv.offsetLeft || 0,
-        offsetTop: vv.offsetTop || 0
+    lastUsableViewportMetrics = {
+        width,
+        height,
+        scale: vv?.scale > 0 ? vv.scale : 1,
+        offsetLeft: vv?.offsetLeft || 0,
+        offsetTop: vv?.offsetTop || 0
     }
+    return lastUsableViewportMetrics
 }
 
 function setImportantStyle(element, property, value) {
@@ -83,7 +90,7 @@ function protectInjectedElement(element, display) {
 //
 // Get settings
 //
-function getSettingsValues() {
+function getSettingsValues(requestId) {
     const keys = [
         'homepageURL',
         'newTabURL',
@@ -105,6 +112,7 @@ function getSettingsValues() {
         'buttonsInToolbarDiv'
     ]
     return browser.storage.sync.get(keys).then((result) => {
+        if (requestId !== initializationId) return
         keys.forEach((key) => {
             settings[key] = result[key]
         })
@@ -118,25 +126,22 @@ function getSettingsValues() {
 // Toolbar
 //
 function appendToolbar() {
-    return new Promise((resolve) => {
+    if (document.body) {
+        appendToolbarSurface()
+        return
+    }
+    bodyObserver = new MutationObserver(() => {
         if (document.body) {
-            appendToolbarAndResolve(resolve)
-            return
+            bodyObserver.disconnect()
+            bodyObserver = null
+            appendToolbarSurface()
         }
-        const observer = new MutationObserver(() => {
-            if (document.body) {
-                observer.disconnect()
-                appendToolbarAndResolve(resolve)
-            }
-        })
-        observer.observe(document.documentElement, {
-            childList: true,
-            subtree: false
-        })
     })
+    bodyObserver.observe(document.documentElement, { childList: true })
 }
 
-function appendToolbarAndResolve(resolve) {
+function appendToolbarSurface() {
+    if (!toolbarAllowed) return
     if (iframeHidden) {
         unhideIcon = document.createElement('div')
         unhideIcon.setAttribute('id', 'essUnhideIcon')
@@ -160,22 +165,20 @@ function appendToolbarAndResolve(resolve) {
         unhideIcon.appendChild(img)
         document.body.insertAdjacentElement('beforeend', unhideIcon)
         makeDraggable(unhideIcon)
-        resolve()
+        updateToolbarGeometry()
     } else {
         toolbarIframe = document.createElement('iframe')
         toolbarIframe.style =
             'display: block !important; height: 0; position: fixed; z-index: 2147483647; margin: 0; padding: 0; min-height: unset; max-height: unset; min-width: unset; max-width: unset; border: 0; background: transparent; color-scheme: light; border-radius: 0'
         protectInjectedElement(toolbarIframe, 'block')
-        setImportantStyle(toolbarIframe, 'height', '0')
         toolbarIframe.src = browser.runtime.getURL('pages/toolbar.html')
         toolbarIframe.setAttribute('id', 'essBtnsToolbar')
-        document.body.insertAdjacentElement('afterend', toolbarIframe)
-        window
-            .matchMedia('(prefers-color-scheme: dark)')
-            .addEventListener('change', () =>
-                applyColorSchemeToIframe(toolbarIframe)
-            )
-        toolbarIframe.addEventListener('load', () => {
+        const iframe = toolbarIframe
+        toolbarColorSchemeQuery = window.matchMedia('(prefers-color-scheme: dark)')
+        toolbarColorSchemeHandler = () => applyColorSchemeToIframe(iframe)
+        toolbarColorSchemeQuery.addEventListener('change', toolbarColorSchemeHandler)
+        iframe.addEventListener('load', () => {
+            if (iframe !== toolbarIframe || !iframe.isConnected) return
             iframeDocument =
                 toolbarIframe.contentDocument ||
                 toolbarIframe.contentWindow.document
@@ -186,9 +189,16 @@ function appendToolbarAndResolve(resolve) {
             if (toolbarDiv && menuDiv) {
                 styleToolbarDivs()
             }
-            resolve()
+            toggleButtonVisibility()
+            appendButtons()
         })
+        // Size before insertion; loading the iframe document may be delayed.
+        updateToolbarGeometry()
+        document.body.insertAdjacentElement('afterend', iframe)
     }
+    hideOnScroll()
+    addViewportListeners()
+    observeToolbarPresence()
 }
 
 function applyColorSchemeToIframe(iframe) {
@@ -296,6 +306,7 @@ function updateMoveToolbarIcon(button) {
 }
 
 function updateToolbarGeometry() {
+    if (iframeHidden ? !unhideIcon : !toolbarIframe) return
     const metrics = getViewportMetrics()
     const toolbarThickness = calculateToolbarThickness()
     const requestedGap = Number(settings.topBottomMargin)
@@ -1054,67 +1065,90 @@ function removeViewportListeners() {
 }
 
 function removeToolbar() {
+    toolbarPresenceObserver?.disconnect()
+    bodyObserver?.disconnect()
+    bodyObserver = null
+    if (toolbarColorSchemeQuery && toolbarColorSchemeHandler) {
+        toolbarColorSchemeQuery.removeEventListener('change', toolbarColorSchemeHandler)
+    }
+    window.removeEventListener('scroll', handleScroll)
+    window.removeEventListener('touchstart', handleTouchStart)
+    window.removeEventListener('touchmove', handleTouchMove)
+    hideMethodInUse = null
     const targetElement =
         document.getElementById('essUnhideIcon') ||
         document.getElementById('essBtnsToolbar')
     closeMenu()
     removeViewportListeners()
     window.removeEventListener('load', checkExistenceAndHeight)
-    if (targetElement) {
-        targetElement.remove()
+    if (targetElement) targetElement.remove()
+    toolbarIframe?.remove()
+    unhideIcon?.remove()
+    toolbarIframe = null
+    unhideIcon = null
+    iframeDocument = null
+    toolbarDiv = null
+    menuDiv = null
+    toolbarButtons = null
+}
+
+function observeToolbarPresence() {
+    if (!toolbarPresenceObserver) {
+        toolbarPresenceObserver = new MutationObserver(recoverToolbar)
+    }
+    toolbarPresenceObserver.disconnect()
+    toolbarPresenceObserver.observe(document.documentElement, { childList: true })
+    if (iframeHidden && document.body) {
+        toolbarPresenceObserver.observe(document.body, { childList: true })
+    }
+}
+
+function recoverToolbar() {
+    if (!toolbarAllowed || bodyObserver) return
+    const surface = iframeHidden ? unhideIcon : toolbarIframe
+    const parent = iframeHidden ? document.body : document.documentElement
+    if (!surface?.isConnected || surface.parentElement !== parent) {
+        removeToolbar()
+        iframeVisible = true
+        appendToolbar()
+    } else {
+        updateToolbarGeometry()
     }
 }
 
 function checkExistenceAndHeight() {
-    setTimeout(function () {
-        const targetElement =
-            document.getElementById('essUnhideIcon') ||
-            document.getElementById('essBtnsToolbar')
-        if (
-            !targetElement ||
-            (targetElement.id === 'essBtnsToolbar' &&
-                targetElement.parentElement.tagName.toLowerCase() !== 'html')
-        ) {
-            initializeToolbar()
-            return
-        }
-        const expectedThickness = calculateToolbarThickness()
-        const targetRect = targetElement.getBoundingClientRect()
-        const actualThickness =
-            iframeHidden ||
-            toolbarGeometry.isHorizontalPosition(currentPosition)
-                ? targetRect.height
-                : targetRect.width
-        if (actualThickness !== expectedThickness) {
-            updateToolbarGeometry()
-        }
-        window.removeEventListener('load', checkExistenceAndHeight)
-    }, 2000)
+    recoverToolbar()
 }
 
 async function initializeToolbar() {
-    const problematicUrls = ['https://gaming.amazon.com']
-    removeToolbar()
-    getSettingsValues().then(async () => {
-        const isCurrentPageExcluded = [
-            ...(settings.excludedUrls || []),
-            ...problematicUrls
-        ].some((excludedUrl) => {
-            const pattern = new RegExp(
-                '^' + excludedUrl.replace(/\*/g, '.*') + '$'
-            )
-            return pattern.test(currentUrl)
+    if (!lifecycleListenersAdded) {
+        lifecycleListenersAdded = true
+        window.addEventListener('pageshow', recoverToolbar)
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) recoverToolbar()
         })
-        if (!isCurrentPageExcluded) {
-            await appendToolbar()
-            updateToolbarGeometry()
-            window.addEventListener('load', checkExistenceAndHeight)
-            toggleButtonVisibility()
-            appendButtons()
-            hideOnScroll()
-            addViewportListeners()
-        }
+    }
+    const requestId = ++initializationId
+    toolbarAllowed = false
+    removeToolbar()
+    await getSettingsValues(requestId)
+    if (requestId !== initializationId) return
+    const problematicUrls = ['https://gaming.amazon.com']
+    const isCurrentPageExcluded = [
+        ...(settings.excludedUrls || []),
+        ...problematicUrls
+    ].some((excludedUrl) => {
+        const pattern = new RegExp(
+            '^' + excludedUrl.replace(/\*/g, '.*') + '$'
+        )
+        return pattern.test(currentUrl)
     })
+    toolbarAllowed = !isCurrentPageExcluded
+    if (toolbarAllowed) {
+        iframeVisible = true
+        appendToolbar()
+        window.addEventListener('load', checkExistenceAndHeight, { once: true })
+    }
 }
 
 browser.runtime.onMessage.addListener((message) => {
