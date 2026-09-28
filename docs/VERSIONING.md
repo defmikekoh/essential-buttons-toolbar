@@ -6,7 +6,7 @@ numeric format: Firefox supports one to four numeric components, and AMO does
 not accept SemVer suffixes such as `-fork.8` or `+build.8` in the manifest version.
 
 - The signing workflow increments the fourth component automatically using the
-  source version and permanent `firefox-build/<version>` reservation tags.
+  source version and `firefox-build/<version>` reservation tags (only the highest five are retained).
   Starting from `1.9.5.8`, the first generated version is `1.9.5.9`. No input or
   version-bump commit is required for each release; failed attempts can leave gaps.
 - Change the first three components only after actually incorporating that upstream

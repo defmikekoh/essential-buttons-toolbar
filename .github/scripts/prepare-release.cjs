@@ -16,32 +16,40 @@ function compare(a, b) {
     return 0
 }
 
-function nextReleaseVersion(current, reservedVersions) {
-    const source = parseVersion(current)
+function nextReleaseVersion(current, reservedVersions, revisionFloor = 0) {
+    if (!Number.isSafeInteger(revisionFloor) || revisionFloor < 0) throw new Error('Invalid revision floor')
+    const source = parseVersion(current.split('.').length === 3 ? `${current}.0` : current)
     let revision = source[3]
     for (const version of reservedVersions) {
         const reserved = parseVersion(version)
         const baseOrder = compare(reserved.slice(0, 3), source.slice(0, 3))
-        if (baseOrder > 0) throw new Error('A newer upstream base has already been reserved; run the workflow from current fork/main')
+        if (baseOrder > 0) throw new Error('A newer upstream base has already been reserved; run the workflow from the current release branch')
         if (baseOrder === 0) revision = Math.max(revision, reserved[3])
     }
-    const next = [...source.slice(0, 3), revision + 1].join('.')
+    const next = [...source.slice(0, 3), Math.max(revision + 1, revisionFloor)].join('.')
     parseVersion(next)
     return next
 }
 
-function reserveVersion(current, repo, sha, gh) {
+function reserveVersion(current, repo, sha, gh, revisionFloor = 0) {
     const refs = gh(['api', '--paginate', `repos/${repo}/git/matching-refs/tags/firefox-build/`, '--jq', '.[].ref'])
         .trim().split('\n').filter(Boolean)
     const versions = refs.map(ref => {
         if (!ref.startsWith(TAG_PREFIX)) throw new Error(`Unexpected reservation ref: ${ref}`)
         return ref.slice(TAG_PREFIX.length)
     })
-    const version = nextReleaseVersion(current, versions)
+    const version = nextReleaseVersion(current, versions, revisionFloor)
     // Persist before submission: a timeout or failed publish must never reuse
     // an AMO version. Creating an existing tag fails rather than overwriting it.
     gh(['api', '--method', 'POST', `repos/${repo}/git/refs`,
         '-f', `ref=${TAG_PREFIX}${version}`, '-f', `sha=${sha}`])
+    // Keep the numeric high-water mark, including failed signing attempts.
+    // Never prune until the new reservation has been created successfully.
+    const obsolete = [...versions, version]
+        .sort((a, b) => compare(parseVersion(b), parseVersion(a))).slice(5)
+    for (const oldVersion of obsolete) {
+        gh(['api', '--method', 'DELETE', `repos/${repo}/git/refs/tags/firefox-build/${oldVersion}`])
+    }
     return version
 }
 
@@ -52,7 +60,8 @@ if (require.main === module) {
     const manifest = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (!manifest.browser_specific_settings?.gecko?.id) throw new Error('The fork Gecko ID is required for signing')
     manifest.version = reserveVersion(manifest.version, repo, sha, args =>
-        execFileSync('gh', args, { encoding: 'utf8' }))
+        execFileSync('gh', args, { encoding: 'utf8' }),
+        Number(process.env.RELEASE_REVISION_FLOOR || 0))
     fs.writeFileSync(file, JSON.stringify(manifest, null, 4) + '\n')
     fs.appendFileSync(envFile, `RELEASE_VERSION=${manifest.version}\n`)
     fs.appendFileSync(outputFile, `version=${manifest.version}\n`)

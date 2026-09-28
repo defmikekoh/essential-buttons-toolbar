@@ -30,16 +30,17 @@ to Mozilla for unlisted signing, and publishes the signed XPI to the rolling
 
 3. Download the versioned `.xpi` from the workflow summary or the
    [Firefox test prerelease](https://github.com/defmikekoh/essential-buttons-toolbar/releases/tag/firefox-test-latest).
-   Older release assets remain available.
+   The five newest signed XPI release assets remain available.
 
 The workflow automatically increments the fourth component, starting after the
 source manifest and all previously reserved builds: `1.9.5.8` → `1.9.5.9` →
 `1.9.5.10`. Only the staged manifest changes; no version-bump commit is needed.
 
-Before signing, it creates a permanent `firefox-build/<version>` tag pointing to
+Before signing, it creates a `firefox-build/<version>` reservation tag pointing to
 the source commit. These tags record used version numbers even if signing times
-out or publishing fails. Keep them: deleting them can allow version reuse. A rerun
-reads the tags again and reserves a fresh version. Failed attempts may leave gaps.
+out or publishing fails. After creating the new tag, it retains only the five highest version tags.
+The highest reservation is always retained, so failed attempts cannot cause reuse.
+Do not manually delete the retained tags. A rerun reads them and reserves a fresh version. Failed attempts may leave gaps.
 The workflow serializes release jobs; a conflicting tag creation aborts signing.
 
 The signed XPI is also retained as a 30-day Actions artifact before publishing to

@@ -100,7 +100,7 @@ jobs:
           Branch: fork/main
           Commit: ${GITHUB_SHA}
 
-          Download the XPI matching this version below. Older assets are retained.
+          Download the XPI matching this version below. The five newest signed XPI assets are retained.
           NOTES
           releases=$(gh api --paginate "repos/$GH_REPO/releases" --jq '.[].tag_name')
           if printf '%s\n' "$releases" | grep -Fxq "$tag"; then
@@ -113,3 +113,8 @@ jobs:
               --notes-file ztemp/release-notes.md --prerelease --latest=false
           fi
           echo "[Download signed XPI](https://github.com/$GH_REPO/releases/download/$tag/essential-buttons-toolbar-${RELEASE_VERSION}.xpi)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the five newest signed release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/prune-release-assets.cjs
