@@ -1,0 +1,115 @@
+name: Sign Firefox XPI prerelease
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+# Do not interrupt an AMO submission with another release run.
+concurrency:
+  group: essential-firefox-prerelease
+  cancel-in-progress: false
+
+jobs:
+  sign:
+    if: github.ref == 'refs/heads/fork/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout selected fork commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Check signing credentials
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          test -n "$AMO_JWT_ISSUER" || { echo 'Missing AMO_JWT_ISSUER repository secret'; exit 1; }
+          test -n "$AMO_JWT_SECRET" || { echo 'Missing AMO_JWT_SECRET repository secret'; exit 1; }
+
+      - name: Test and build
+        run: |
+          npm test
+          npm run build
+          mkdir -p ztemp/signing-source
+          unzip -q ztemp/essential-buttons-toolbar.xpi -d ztemp/signing-source
+
+      - name: Install signing tool
+        run: npm install --global web-ext@10.6.0
+
+      - name: Validate packaged extension
+        run: web-ext lint --source-dir ztemp/signing-source --self-hosted
+
+      - name: Reserve next fork version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node .github/scripts/prepare-release.cjs ztemp/signing-source/manifest.json
+
+      - name: Sign through Mozilla (unlisted)
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          web-ext sign --channel unlisted \
+            --source-dir ztemp/signing-source \
+            --artifacts-dir ztemp/signed \
+            --approval-timeout 1200000
+          files=(ztemp/signed/*.xpi)
+          test "${#files[@]}" -eq 1 && test -f "${files[0]}"
+          mv "${files[0]}" "ztemp/essential-buttons-toolbar-${RELEASE_VERSION}.xpi"
+
+      - name: Retain signed XPI even if release publishing fails
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-xpi-${{ steps.version.outputs.version }}
+          path: ztemp/essential-buttons-toolbar-${{ steps.version.outputs.version }}.xpi
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish rolling Firefox prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag=firefox-test-latest
+          # List tags first so an API failure cannot be mistaken for a missing tag.
+          tags=$(gh api --paginate "repos/$GH_REPO/git/matching-refs/tags/$tag" --jq '.[].ref')
+          if printf '%s\n' "$tags" | grep -Fxq "refs/tags/$tag"; then
+            gh api --method PATCH "repos/$GH_REPO/git/refs/tags/$tag" -f sha="$GITHUB_SHA" -F force=true
+          else
+            gh api --method POST "repos/$GH_REPO/git/refs" -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
+          fi
+          cat > ztemp/release-notes.md <<NOTES
+          Mozilla-signed, unlisted Essential Buttons Toolbar fork for Firefox.
+
+          Version: ${RELEASE_VERSION}
+          Branch: fork/main
+          Commit: ${GITHUB_SHA}
+
+          Download the XPI matching this version below. Older assets are retained.
+          NOTES
+          releases=$(gh api --paginate "repos/$GH_REPO/releases" --jq '.[].tag_name')
+          if printf '%s\n' "$releases" | grep -Fxq "$tag"; then
+            gh release upload "$tag" "ztemp/essential-buttons-toolbar-${RELEASE_VERSION}.xpi" --clobber
+            gh release edit "$tag" --title "Essential fork ${RELEASE_VERSION}" \
+              --notes-file ztemp/release-notes.md --prerelease --latest=false
+          else
+            gh release create "$tag" "ztemp/essential-buttons-toolbar-${RELEASE_VERSION}.xpi" \
+              --verify-tag --title "Essential fork ${RELEASE_VERSION}" \
+              --notes-file ztemp/release-notes.md --prerelease --latest=false
+          fi
+          echo "[Download signed XPI](https://github.com/$GH_REPO/releases/download/$tag/essential-buttons-toolbar-${RELEASE_VERSION}.xpi)" >> "$GITHUB_STEP_SUMMARY"

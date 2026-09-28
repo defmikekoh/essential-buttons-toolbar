@@ -8,6 +8,7 @@ Essential Buttons Toolbar and Homepage is a Firefox Manifest V2 extension, prima
 
 - `npm test` — Node's built-in test runner; covers geometry, toolbar lifecycle, button dispatch, and Close/Undo behavior.
 - `npm run build` (or `npm run build:xpi`) — Packages `ztemp/essential-buttons-toolbar.xpi`; does not run tests or sign the extension.
+- `.github/workflows/xpi-prerelease.yml` — Manual signing/release from `fork/main`; see `docs/RELEASING.md` and `docs/VERSIONING.md`. No automatic push triggers.
 - No lint command is currently configured. Follow the existing four-space indentation and mostly semicolon-free style.
 - Use `ztemp/` for scratch scripts, profiles, screenshots, and builds. `ztemp/` and `zothercode/` are globally gitignored; the latter may contain related checkouts or symlinks.
 
